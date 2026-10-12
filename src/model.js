@@ -27,6 +27,7 @@
       this.bg = opts.bg || '#F7F2E8';
       this.frameCount = 0;
       this.layers = []; // {id, name, visible, cels: [canvas|null]}
+      this.notes = Array.isArray(opts.notes) ? opts.notes.slice() : []; // per-frame direction notes (coach)
       this.undoStack = [];
       this.redoStack = [];
     }
@@ -65,22 +66,27 @@
         }
         layer.cels.splice(at, 0, c);
       }
+      if (this.notes.length > at) this.notes.splice(at, 0, null);
       this.frameCount++;
     }
 
     removeFrame(at) {
       const removed = this.layers.map((l) => l.cels.splice(at, 1)[0]);
+      removed.note = this.notes.splice(at, 1)[0] || null;
       this.frameCount--;
       return removed;
     }
 
     restoreFrame(at, removed) {
       this.layers.forEach((l, i) => l.cels.splice(at, 0, removed[i]));
+      if (this.notes.length >= at) this.notes.splice(at, 0, removed.note || null);
+      else if (removed.note) this.notes[at] = removed.note;
       this.frameCount++;
     }
 
     swapFrames(a, b) {
       for (const l of this.layers) { const t = l.cels[a]; l.cels[a] = l.cels[b]; l.cels[b] = t; }
+      const n = this.notes[a]; this.notes[a] = this.notes[b] || null; this.notes[b] = n || null;
     }
 
     /* Undo: each entry is {undo(), redo()} */
@@ -116,6 +122,7 @@
       return {
         id: this.id, name: this.name, width: this.width, height: this.height, fps: this.fps, bg: this.bg,
         frameCount: this.frameCount, version: 1,
+        notes: Array.from({ length: this.frameCount }, (_, i) => this.notes[i] || null),
         layers: this.layers.map((l) => ({
           id: l.id, name: l.name, visible: l.visible,
           cels: l.cels.map(celUrl),

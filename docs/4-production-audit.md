@@ -17,6 +17,7 @@ Checked on 2026-10-12 by driving the deployed build in headless Chromium: deskto
 | Saving | Autosave, reload restores project, save on tab hide | Pass |
 | Offline | Service worker caches app; offline reload restores project | Pass |
 | Export | GIF (adaptive palette, decodes, loops), MP4/WebM video, sprite sheet, PNG, project file | Pass |
+| Coach | Built-in plan/feedback offline. Gemini plan/feedback, key test, and fallback on a rejected key (Gemini responses mocked in tests). Notes survive undo and reload | Pass |
 | Errors | No console errors across the whole run | Pass |
 
 ## Fixed during the audit
@@ -34,3 +35,9 @@ Checked on 2026-10-12 by driving the deployed build in headless Chromium: deskto
 - Raster drawing only. There is no vector art, bones/rigging or audio track.
 - Video export runs in real time and uses the browser's encoder (MP4 in Chrome and Safari, WebM in Firefox).
 - Very long, high-resolution animations use a lot of memory, because each frame of each layer is a full-size canvas.
+
+## Gemini (bring your own key)
+
+- No key is shipped in the site. Each user pastes their own key, which is stored in that browser's localStorage and sent only to `generativelanguage.googleapis.com` in the `x-goog-api-key` header.
+- Every Gemini call falls back to the built-in coach on error, so the app never dead-ends.
+- Tests mocked Gemini's responses. A real key has not been exercised from this environment, so the first live check should be **Coach → Gemini key → Test**.

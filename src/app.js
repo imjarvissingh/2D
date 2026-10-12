@@ -1,6 +1,6 @@
 /* Loomframe app: routing, landing, projects, studio (drawing, motion, timeline, playback, export). */
 (function () {
-  const { api, gif, Project, makeCanvas, touch, sample } = window.LF;
+  const { api, gif, Project, makeCanvas, touch, sample, coach } = window.LF;
   const $ = (id) => document.getElementById(id);
 
   const SWATCHES = ['#16141f', '#f7f2e8', '#ff6b4a', '#ffb627', '#2ec4b6',
@@ -221,6 +221,7 @@
   async function leaveStudio() {
     stopPlayback();
     closeMotion();
+    closeCoach();
     if (state.project) await saveNow();
     state.project = null;
   }
@@ -300,6 +301,9 @@
     });
     if (state.motion && !state.playing) drawMotionPreview();
     $('frameLabel').textContent = `${f + 1} / ${p.frameCount}`;
+    const note = !state.playing && p.notes[f];
+    $('noteBar').hidden = !note;
+    if (note) $('noteBar').querySelector('span').textContent = `Frame ${f + 1} · ${note}`;
   }
 
   function applyStroke(ctx) {
@@ -750,7 +754,8 @@
     tracks.appendChild(corner);
     for (let f = 0; f < p.frameCount; f++) {
       const n = document.createElement('button');
-      n.className = 'frame-num' + (f === state.frame ? ' current' : '');
+      n.className = 'frame-num' + (f === state.frame ? ' current' : '') + (p.notes[f] ? ' has-note' : '');
+      if (p.notes[f]) n.title = p.notes[f];
       n.textContent = f + 1;
       n.dataset.frame = f;
       n.addEventListener('click', () => { stopPlayback(); goTo(f); });
@@ -1051,6 +1056,138 @@
     }
   }
 
+  /* ================= coach ================= */
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function updateCoachMode() {
+    const ai = !!coach.settings.key();
+    $('coachMode').textContent = ai ? 'Gemini' : 'Built-in';
+    $('coachMode').classList.toggle('ai', ai);
+  }
+  function openCoach(tab) {
+    if (!state.project) return;
+    $('coachPanel').hidden = false;
+    $('coachBtn').classList.add('on');
+    $('coach').hidden = true;
+    $('geminiKey').value = coach.settings.key();
+    $('geminiModel').value = coach.settings.model();
+    updateCoachMode();
+    if (tab) setCoachTab(tab);
+  }
+  function closeCoach() {
+    $('coachPanel').hidden = true;
+    $('coachBtn').classList.remove('on');
+  }
+  function setCoachTab(tab) {
+    document.querySelectorAll('#coachPanel .tab').forEach((t) => t.classList.toggle('on', t.dataset.tab === tab));
+    document.querySelectorAll('#coachPanel [data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== tab; });
+  }
+  function sourceLine(out, res) {
+    out.appendChild(el('div', 'meta', res.source === 'gemini' ? 'From Gemini (' + coach.settings.model() + ')' : 'From the built-in coach'));
+    if (res.fallback) out.appendChild(el('div', 'warn', 'Gemini was unavailable, so this came from the built-in coach. ' + res.fallback));
+  }
+
+  let busy = false;
+  async function makePlan() {
+    if (busy) return;
+    const prompt = $('planPrompt').value.trim() || $('planPrompt').placeholder.replace(/^e\.g\. /, '');
+    const out = $('planOut');
+    out.innerHTML = '';
+    out.appendChild(el('p', 'loading', coach.settings.key() ? 'Asking Gemini…' : 'Planning…'));
+    busy = true;
+    try {
+      const plan = await coach.plan(prompt);
+      out.innerHTML = '';
+      sourceLine(out, plan);
+      out.appendChild(el('b', '', plan.title));
+      out.appendChild(el('p', 'meta', `${plan.frames} frames at ${plan.fps} FPS · ${(plan.frames / plan.fps).toFixed(1)}s loop`));
+      const list = el('ol');
+      for (const k of plan.keyframes) {
+        const li = el('li');
+        const fb = el('button', 'fr', 'F' + k.frame);
+        fb.title = 'Go to frame ' + k.frame;
+        fb.addEventListener('click', () => { if (k.frame <= state.project.frameCount) { stopPlayback(); goTo(k.frame - 1); } });
+        li.appendChild(fb);
+        li.appendChild(document.createTextNode(k.pose));
+        if (k.tip) li.appendChild(el('small', '', k.tip));
+        list.appendChild(li);
+      }
+      out.appendChild(list);
+      const apply = el('button', 'btn primary block', 'Add plan to timeline');
+      apply.addEventListener('click', () => applyPlan(plan));
+      out.appendChild(apply);
+    } catch (e) {
+      out.innerHTML = '';
+      out.appendChild(el('div', 'warn', 'Could not make a plan: ' + e.message));
+    } finally {
+      busy = false;
+    }
+  }
+
+  function applyPlan(plan) {
+    const p = state.project;
+    const oldFps = p.fps, oldNotes = p.notes.slice(), oldFrame = state.frame;
+    let added = 0;
+    structural(() => {
+      p.fps = plan.fps;
+      added = 0;
+      while (p.frameCount < plan.frames) { p.insertFrame(p.frameCount); added++; }
+      p.notes = Array.from({ length: p.frameCount }, () => null);
+      for (const k of plan.keyframes) p.notes[k.frame - 1] = k.tip ? `${k.pose}. ${k.tip}` : k.pose;
+      state.frame = 0;
+      $('fpsInput').value = p.fps;
+    }, () => {
+      for (let i = 0; i < added; i++) p.removeFrame(p.frameCount - 1);
+      p.fps = oldFps; p.notes = oldNotes; state.frame = oldFrame;
+      $('fpsInput').value = p.fps;
+    });
+    toast(added ? `Added ${added} frames with key-pose notes. Notes appear on the canvas.` : 'Key-pose notes added. They appear on the canvas.');
+  }
+
+  async function reviewFrame() {
+    if (busy) return;
+    const out = $('reviewOut');
+    out.innerHTML = '';
+    out.appendChild(el('p', 'loading', coach.settings.key() ? 'Gemini is looking at your frame…' : 'Looking at your frame…'));
+    busy = true;
+    try {
+      const res = await coach.critique(state.project, state.frame);
+      out.innerHTML = '';
+      sourceLine(out, res);
+      out.appendChild(el('b', '', `Frame ${state.frame + 1}`));
+      const list = el('ul');
+      res.tips.forEach((t) => list.appendChild(el('li', '', t)));
+      out.appendChild(list);
+    } catch (e) {
+      out.innerHTML = '';
+      out.appendChild(el('div', 'warn', 'Could not review the frame: ' + e.message));
+    } finally {
+      busy = false;
+    }
+  }
+
+  function keyStatus(msg, kind) {
+    const k = $('keyStatus');
+    k.textContent = msg;
+    k.className = 'key-status' + (kind ? ' ' + kind : '');
+  }
+  async function testKey() {
+    coach.settings.save($('geminiKey').value, $('geminiModel').value);
+    updateCoachMode();
+    if (!coach.settings.key()) { keyStatus('Paste a key first.', 'err'); return; }
+    keyStatus('Testing…');
+    try {
+      await coach.testKey();
+      keyStatus('Key works. The coach now uses Gemini.', 'ok');
+    } catch (e) {
+      keyStatus(e.message, 'err');
+    }
+  }
+
   /* ================= tools & settings ================= */
   function setTool(t) {
     state.tool = t;
@@ -1145,6 +1282,24 @@
     $('layerUpBtn').addEventListener('click', () => moveLayer(1));
     $('layerDownBtn').addEventListener('click', () => moveLayer(-1));
 
+    $('coachBtn').addEventListener('click', () => ($('coachPanel').hidden ? openCoach() : closeCoach()));
+    $('coachPanelClose').addEventListener('click', closeCoach);
+    document.querySelectorAll('#coachPanel .tab').forEach((t) => t.addEventListener('click', () => setCoachTab(t.dataset.tab)));
+    document.querySelectorAll('#coachPanel .examples button').forEach((b) => b.addEventListener('click', () => { $('planPrompt').value = b.dataset.ex; makePlan(); }));
+    $('planBtn').addEventListener('click', makePlan);
+    $('planPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); makePlan(); } });
+    $('reviewBtn').addEventListener('click', reviewFrame);
+    $('keySave').addEventListener('click', () => {
+      coach.settings.save($('geminiKey').value, $('geminiModel').value);
+      $('geminiModel').value = coach.settings.model();
+      updateCoachMode();
+      keyStatus(coach.settings.key() ? 'Saved in this browser.' : 'No key saved. The built-in coach is active.', 'ok');
+    });
+    $('keyTest').addEventListener('click', testKey);
+    $('keyRemove').addEventListener('click', () => {
+      coach.settings.clear(); $('geminiKey').value = ''; updateCoachMode();
+      keyStatus('Key removed. The built-in coach is active.', 'ok');
+    });
     $('motionBtn').addEventListener('click', () => (state.motion ? closeMotion() : openMotion()));
     $('motionClose').addEventListener('click', closeMotion);
     $('motionApply').addEventListener('click', applyMotion);
@@ -1182,6 +1337,7 @@
     if (!state.project || $('studio').hidden) return;
     const tag = (e.target.tagName || '').toLowerCase();
     if ((tag === 'input' && !['range', 'color', 'checkbox'].includes(e.target.type)) || tag === 'select' || tag === 'textarea') return;
+    if (e.key === 'Escape' && !$('coachPanel').hidden) { closeCoach(); return; }
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -1197,6 +1353,7 @@
       case 'o': case 'O': toggleOnion(); break;
       case 'l': case 'L': toggleLoop(); break;
       case 'm': case 'M': state.motion ? closeMotion() : openMotion(); break;
+      case 'c': case 'C': $('coachPanel').hidden ? openCoach() : closeCoach(); break;
       case 'n': case 'N': stopPlayback(); addFrame(false); break;
       case 'd': case 'D': stopPlayback(); addFrame(true); break;
       case 'Delete': case 'Backspace': stopPlayback(); deleteFrame(); break;

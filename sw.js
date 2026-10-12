@@ -1,7 +1,7 @@
 /* Loomframe service worker: makes the studio load offline after the first visit.
  * Pages are network-first (so new deploys show up), assets are stale-while-revalidate. */
-const CACHE = 'loomframe-v2';
-const SHELL = ['./', 'index.html', 'src/styles.css', 'src/api.js', 'src/gif.js', 'src/model.js', 'src/sample.js', 'src/app.js',
+const CACHE = 'loomframe-v3';
+const SHELL = ['./', 'index.html', 'src/styles.css', 'src/api.js', 'src/gif.js', 'src/model.js', 'src/sample.js', 'src/coach.js', 'src/app.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

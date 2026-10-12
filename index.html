@@ -52,6 +52,7 @@
       <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 9 5-9 5-9-5zM3 14l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
       <symbol id="i-offline" viewBox="0 0 24 24"><path d="M12 3 4 6.5V12c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5zM18.5 15c.3 1.8 1.2 2.7 3 3-1.8.3-2.7 1.2-3 3-.3-1.8-1.2-2.7-3-3 1.8-.3 2.7-1.2 3-3z" fill="currentColor"/></symbol>
       <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" stroke="currentColor" stroke-width="1.6"/></symbol>
     </defs>
   </svg>
@@ -100,6 +101,7 @@
         <article class="feature"><svg><use href="#i-motion"/></svg><h3>One-click motion</h3><p>Slide, spin, scale or fade any drawing over time with easing. Loomframe draws the in-betweens for you.</p></article>
         <article class="feature"><svg><use href="#i-layers"/></svg><h3>Layers and timeline</h3><p>Separate backgrounds, characters and effects. Duplicate, reorder and preview frames on a visual timeline.</p></article>
         <article class="feature"><svg><use href="#i-film"/></svg><h3>Export anywhere</h3><p>Share as an animated GIF or video, or hand off a sprite sheet to your game engine.</p></article>
+        <article class="feature"><svg><use href="#i-sparkle"/></svg><h3>Animation coach</h3><p>Describe an idea and get a frame-by-frame plan, or ask for feedback on a frame. Works offline, and gets smarter with your own Gemini key.</p></article>
         <article class="feature"><svg><use href="#i-offline"/></svg><h3>Private by design</h3><p>No account and no cloud. Projects autosave on your device and move between devices as a single file.</p></article>
       </div>
     </section>
@@ -154,6 +156,7 @@
       <input id="projName" class="name-input" aria-label="Project name" maxlength="60">
       <span id="saveState" class="save-state">Saved</span>
       <div class="spacer"></div>
+      <button id="coachBtn" class="btn ghost sm coach-btn" title="Animation coach (C)"><svg class="ico"><use href="#i-sparkle"/></svg>Coach</button>
       <button id="undoBtn" class="icon-btn" title="Undo (Ctrl/⌘ Z)" aria-label="Undo"><svg><use href="#i-undo"/></svg></button>
       <button id="redoBtn" class="icon-btn" title="Redo (Shift Ctrl/⌘ Z)" aria-label="Redo"><svg><use href="#i-redo"/></svg></button>
       <button id="helpBtn" class="icon-btn" title="Shortcuts and tips (?)" aria-label="Shortcuts and tips"><svg><use href="#i-help"/></svg></button>
@@ -202,6 +205,46 @@
           <p>Tip: <b>Motion</b> animates a drawing for you.</p>
           <button id="coachClose" class="btn primary sm">Got it</button>
         </div>
+        <div id="noteBar" class="note-bar" hidden><svg><use href="#i-sparkle"/></svg><span></span></div>
+        <aside id="coachPanel" class="coach-panel" hidden aria-label="Animation coach">
+          <header><svg><use href="#i-sparkle"/></svg><b>Coach</b><span id="coachMode" class="badge">Built-in</span><button id="coachPanelClose" class="x" aria-label="Close">✕</button></header>
+          <div class="tabs" role="tablist">
+            <button class="tab on" data-tab="plan" role="tab">Plan</button>
+            <button class="tab" data-tab="review" role="tab">Feedback</button>
+            <button class="tab" data-tab="ai" role="tab">Gemini key</button>
+          </div>
+          <section data-pane="plan">
+            <label class="lbl" for="planPrompt">Describe your animation</label>
+            <textarea id="planPrompt" rows="2" maxlength="300" placeholder="e.g. a frog jumps onto a lily pad"></textarea>
+            <div class="examples">
+              <button data-ex="a ball bouncing">Bouncing ball</button>
+              <button data-ex="a character walking">Walk cycle</button>
+              <button data-ex="a hand waving hello">Wave</button>
+              <button data-ex="eyes blinking">Blink</button>
+            </div>
+            <button id="planBtn" class="btn primary block">Make a plan</button>
+            <div id="planOut" class="coach-out" aria-live="polite"></div>
+          </section>
+          <section data-pane="review" hidden>
+            <p class="hint-line">The coach looks at the current frame (and the one before it) and suggests improvements.</p>
+            <button id="reviewBtn" class="btn primary block">Review this frame</button>
+            <div id="reviewOut" class="coach-out" aria-live="polite"></div>
+          </section>
+          <section data-pane="ai" hidden>
+            <p class="hint-line">The coach works without a key. Add your own <b>Gemini API key</b> for smarter plans and feedback that actually looks at your drawing.</p>
+            <label class="lbl" for="geminiKey">Gemini API key</label>
+            <input id="geminiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+            <label class="lbl" for="geminiModel">Model</label>
+            <input id="geminiModel" type="text" spellcheck="false">
+            <div class="row-btns">
+              <button id="keySave" class="btn primary sm">Save</button>
+              <button id="keyTest" class="btn ghost sm">Test</button>
+              <button id="keyRemove" class="btn ghost sm">Remove</button>
+            </div>
+            <p id="keyStatus" class="key-status" aria-live="polite"></p>
+            <p class="fine">Your key is stored only in this browser and is sent only to Google's Gemini API, when you use the coach. Your prompt and frame images go to Google with it. Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</p>
+          </section>
+        </aside>
         <aside id="motionPanel" class="motion-panel" hidden aria-label="Motion">
           <header><svg><use href="#i-motion"/></svg><b>Motion</b><button id="motionClose" class="x" aria-label="Close">✕</button></header>
           <p class="hint-line">Animates the selected layer's drawing from this frame. <b>Drag on the canvas</b> to set where it ends.</p>
@@ -288,7 +331,8 @@
         <div><kbd>M</kbd> Motion</div><div><kbd>Delete</kbd> Delete frame</div>
         <div><kbd>[</kbd><kbd>]</kbd> Brush size</div><div><kbd>+</kbd><kbd>−</kbd><kbd>0</kbd> Zoom / fit</div>
         <div><kbd>⌘/Ctrl Z</kbd> Undo</div><div><kbd>⇧ ⌘/Ctrl Z</kbd> Redo</div>
-        <div><kbd>⌘/Ctrl S</kbd> Save now</div><div><kbd>?</kbd> This list</div>
+        <div><kbd>C</kbd> Coach</div><div><kbd>⌘/Ctrl S</kbd> Save now</div>
+        <div><kbd>?</kbd> This list</div>
       </div>
       <p class="modal-note">Using a stylus? Pressure controls line thickness. Pinch with two fingers, or hold Ctrl and scroll, to zoom.</p>
     </div>
@@ -300,6 +344,7 @@
   <script src="src/gif.js"></script>
   <script src="src/model.js"></script>
   <script src="src/sample.js"></script>
+  <script src="src/coach.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>
