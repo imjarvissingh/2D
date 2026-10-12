@@ -1,0 +1,15 @@
+# Keep the gh-pages branch (served by GitHub Pages) in sync with main.
+name: Sync gh-pages
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git push --force origin HEAD:gh-pages
