@@ -1,11 +1,17 @@
-/* Loomframe app: gallery, studio, drawing, timeline, playback, export. */
+/* Loomframe app: routing, landing, projects, studio (drawing, motion, timeline, playback, export). */
 (function () {
-  const { api, gif, Project, makeCanvas, touch } = window.LF;
+  const { api, gif, Project, makeCanvas, touch, sample } = window.LF;
   const $ = (id) => document.getElementById(id);
 
   const SWATCHES = ['#16141f', '#f7f2e8', '#ff6b4a', '#ffb627', '#2ec4b6',
     '#9b7bff', '#3a86ff', '#ef476f', '#06d6a0', '#8d6e63'];
   const ONION_PREV = '#ff6b4a', ONION_NEXT = '#2ec4b6';
+  const TEMPLATES = [
+    { label: 'Classic', note: '960 × 540 · recommended', w: 960, h: 540 },
+    { label: 'Widescreen', note: '1280 × 720 · HD video', w: 1280, h: 720 },
+    { label: 'Square', note: '800 × 800 · social posts', w: 800, h: 800 },
+    { label: 'Vertical', note: '540 × 960 · stories', w: 540, h: 960 },
+  ];
 
   const state = {
     project: null,
@@ -16,30 +22,115 @@
     size: 8,
     opacity: 1,
     onion: true,
+    onionDepth: 1,
+    loop: true,
     playing: false,
     stroke: null,
+    drag: null,
+    zoom: 1,
+    motion: null,
   };
 
   const view = $('view');
   const vctx = view.getContext('2d');
   let strokeCanvas = null, previewCanvas = null, tintCanvas = null;
 
-  /* ================= toast ================= */
+  /* ================= helpers ================= */
   let toastTimer;
   function toast(msg) {
     const t = $('toast');
     t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  }
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* optional */ } },
+  };
+  function showView(id) {
+    for (const v of ['home', 'gallery', 'studio']) $(v).hidden = v !== id;
+    document.body.dataset.view = id;
   }
 
-  /* ================= gallery ================= */
+  /* ================= routing ================= */
+  async function route() {
+    const hash = location.hash || '#/';
+    const studioMatch = hash.match(/^#\/studio\/([\w-]+)/);
+    if (state.project && !(studioMatch && studioMatch[1] === state.project.id)) await leaveStudio();
+    if (hash === '#/new') return newProject(TEMPLATES[0]);
+    if (hash === '#/sample') return openSample();
+    if (hash === '#/projects') return showGallery();
+    if (studioMatch) {
+      if (state.project && state.project.id === studioMatch[1]) return;
+      return openProject(studioMatch[1]);
+    }
+    if (hash.startsWith('#/') || hash === '') return showHome();
+    // in-page anchors on the landing page (#features, #how)
+    if ($('home').hidden) showHome();
+    const el = document.querySelector(hash);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  }
+  function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+
+  /* ================= landing ================= */
+  let hero = null;
+  function showHome() {
+    showView('home');
+    document.title = 'Loomframe · Hand-drawn animation in your browser';
+    startHero();
+  }
+  function startHero() {
+    if (!hero) {
+      const p = sample.build();
+      const strip = $('heroStrip');
+      const thumbs = [];
+      for (let f = 0; f < p.frameCount; f++) {
+        const c = makeCanvas(96, 54);
+        const full = makeCanvas(p.width, p.height);
+        p.renderFrame(full.getContext('2d'), f);
+        c.getContext('2d').drawImage(full, 0, 0, 96, 54);
+        strip.appendChild(c);
+        thumbs.push(c);
+      }
+      hero = { p, thumbs, frame: 0, last: 0, raf: 0 };
+    }
+    cancelAnimationFrame(hero.raf);
+    const ctx = $('heroCanvas').getContext('2d');
+    const tick = (now) => {
+      if ($('home').hidden) return;
+      if (now - hero.last >= 1000 / hero.p.fps) {
+        hero.last = now;
+        hero.p.renderFrame(ctx, hero.frame);
+        hero.thumbs.forEach((t, i) => t.classList.toggle('on', i === hero.frame));
+        hero.frame = (hero.frame + 1) % hero.p.frameCount;
+      }
+      hero.raf = requestAnimationFrame(tick);
+    };
+    hero.raf = requestAnimationFrame(tick);
+  }
+
+  /* ================= projects ================= */
   async function showGallery() {
-    stopPlayback();
-    if (state.project) await saveNow();
-    state.project = null;
-    $('studio').hidden = true;
-    $('gallery').hidden = false;
+    showView('gallery');
+    document.title = 'Projects · Loomframe';
+    const tpl = $('templates');
+    if (!tpl.children.length) {
+      for (const t of TEMPLATES) {
+        const b = document.createElement('button');
+        b.className = 'template';
+        const ratio = t.w / t.h;
+        b.innerHTML = `<span class="frame-box"><span class="shape" style="width:${ratio >= 1 ? 64 : 64 * ratio}px;height:${ratio >= 1 ? 64 / ratio : 64}px"></span></span><b></b><small></small>`;
+        b.querySelector('b').textContent = t.label;
+        b.querySelector('small').textContent = t.note;
+        b.addEventListener('click', () => newProject(t));
+        tpl.appendChild(b);
+      }
+      const s = document.createElement('button');
+      s.className = 'template sample';
+      s.innerHTML = '<span class="frame-box"><span class="shape demo"></span></span><b>Sample scene</b><small>See a finished animation</small>';
+      s.addEventListener('click', () => go('#/sample'));
+      tpl.appendChild(s);
+    }
     const list = await api.list();
     const shelf = $('shelf');
     shelf.innerHTML = '';
@@ -50,13 +141,13 @@
       card.tabIndex = 0;
       card.innerHTML = `<div class="thumb"></div>
         <div class="meta"><b></b><span></span></div>
-        <button class="del" title="Delete" aria-label="Delete">✕</button>`;
+        <button class="del" title="Delete project" aria-label="Delete project"><svg><use href="#i-trash"/></svg></button>`;
       if (m.thumb) card.querySelector('.thumb').style.backgroundImage = `url(${m.thumb})`;
       card.querySelector('b').textContent = m.name;
       card.querySelector('span').textContent =
         `${m.frames} frame${m.frames === 1 ? '' : 's'} · ${m.width}×${m.height} · ${new Date(m.updatedAt).toLocaleDateString()}`;
-      card.addEventListener('click', () => openProject(m.id));
-      card.addEventListener('keydown', (e) => { if (e.key === 'Enter') openProject(m.id); });
+      card.addEventListener('click', () => go('#/studio/' + m.id));
+      card.addEventListener('keydown', (e) => { if (e.key === 'Enter') go('#/studio/' + m.id); });
       card.querySelector('.del').addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm(`Delete “${m.name}”? This cannot be undone.`)) return;
@@ -67,16 +158,25 @@
     }
   }
 
-  async function newProject() {
-    const [w, h] = $('newSize').value.split('x').map(Number);
-    const p = Project.create({ width: w, height: h, name: 'Loop ' + new Date().toLocaleDateString() });
+  async function newProject(t) {
+    const p = Project.create({ width: t.w, height: t.h, name: 'Untitled animation' });
     await api.save(p.serialize());
+    history.replaceState(null, '', '#/studio/' + p.id);
     enterStudio(p);
+  }
+
+  async function openSample() {
+    const p = sample.build();
+    p.id = LF.uid();
+    await api.save(p.serialize());
+    history.replaceState(null, '', '#/studio/' + p.id);
+    enterStudio(p);
+    toast('This is the sample scene. Press Space to play it.');
   }
 
   async function openProject(id) {
     const data = await api.get(id);
-    if (!data) { toast('That loop could not be found.'); return showGallery(); }
+    if (!data) { toast('That project could not be found.'); return go('#/projects'); }
     enterStudio(await Project.deserialize(data));
   }
 
@@ -87,7 +187,8 @@
       data.id = LF.uid();
       const p = await Project.deserialize(data);
       await api.save(p.serialize());
-      toast('Loop imported.');
+      toast('Project imported.');
+      history.replaceState(null, '', '#/studio/' + p.id);
       enterStudio(p);
     } catch (e) {
       toast('That file is not a Loomframe project.');
@@ -99,29 +200,54 @@
     state.project = p;
     state.frame = 0;
     state.layer = p.layers.length - 1;
+    state.zoom = 1;
     view.width = p.width; view.height = p.height;
     strokeCanvas = makeCanvas(p.width, p.height);
     previewCanvas = makeCanvas(p.width, p.height);
     tintCanvas = makeCanvas(p.width, p.height);
+    closeMotion();
     $('projName').value = p.name;
     $('fpsInput').value = p.fps;
     $('bgInput').value = p.bg.toLowerCase();
-    $('gallery').hidden = true;
-    $('studio').hidden = false;
+    showView('studio');
+    document.title = p.name + ' · Loomframe';
     setSaveState('Saved');
     buildTimeline();
     fitStage();
     render();
+    if (!store.get('loomframe:coach')) $('coach').hidden = false;
   }
 
-  function fitStage() {
+  async function leaveStudio() {
+    stopPlayback();
+    closeMotion();
+    if (state.project) await saveNow();
+    state.project = null;
+  }
+
+  /* ================= zoom & pan ================= */
+  function fitScale() {
+    const p = state.project, stage = $('stage');
+    return Math.min((stage.clientWidth - 40) / p.width, (stage.clientHeight - 40) / p.height);
+  }
+  function fitStage(keepCenter) {
     const p = state.project;
     if (!p) return;
     const stage = $('stage');
-    const sw = stage.clientWidth - 32, sh = stage.clientHeight - 32;
-    const scale = Math.min(sw / p.width, sh / p.height);
-    view.style.width = Math.max(50, Math.floor(p.width * scale)) + 'px';
-    view.style.height = Math.max(50, Math.floor(p.height * scale)) + 'px';
+    const cx = (stage.scrollLeft + stage.clientWidth / 2) / Math.max(1, stage.scrollWidth);
+    const cy = (stage.scrollTop + stage.clientHeight / 2) / Math.max(1, stage.scrollHeight);
+    const scale = Math.max(0.05, fitScale() * state.zoom);
+    view.style.width = Math.max(40, Math.round(p.width * scale)) + 'px';
+    view.style.height = Math.max(40, Math.round(p.height * scale)) + 'px';
+    if (keepCenter) {
+      stage.scrollLeft = cx * stage.scrollWidth - stage.clientWidth / 2;
+      stage.scrollTop = cy * stage.scrollHeight - stage.clientHeight / 2;
+    }
+    $('zoomLabel').textContent = Math.round(scale * 100) + '%';
+  }
+  function setZoom(z) {
+    state.zoom = Math.max(0.25, Math.min(8, z));
+    fitStage(true);
   }
 
   /* ================= rendering ================= */
@@ -153,13 +279,16 @@
     vctx.fillStyle = p.bg;
     vctx.fillRect(0, 0, p.width, p.height);
     if (state.onion && !state.playing) {
-      if (f > 0) drawTinted(f - 1, ONION_PREV, 0.3);
-      if (f < p.frameCount - 1) drawTinted(f + 1, ONION_NEXT, 0.22);
+      for (let d = state.onionDepth; d >= 1; d--) {
+        const a = 0.32 / d;
+        if (f - d >= 0) drawTinted(f - d, ONION_PREV, a);
+        if (f + d < p.frameCount) drawTinted(f + d, ONION_NEXT, a * 0.75);
+      }
     }
     p.layers.forEach((l, i) => {
       if (!l.visible) return;
       const c = l.cels[f];
-      if (i === state.layer && state.stroke && state.stroke.live) {
+      if (i === state.layer && state.stroke) {
         const pctx = previewCanvas.getContext('2d');
         pctx.clearRect(0, 0, p.width, p.height);
         if (c) pctx.drawImage(c, 0, 0);
@@ -169,6 +298,7 @@
         vctx.drawImage(c, 0, 0);
       }
     });
+    if (state.motion && !state.playing) drawMotionPreview();
     $('frameLabel').textContent = `${f + 1} / ${p.frameCount}`;
   }
 
@@ -180,7 +310,7 @@
     ctx.restore();
   }
 
-  /* ================= input ================= */
+  /* ================= drawing input ================= */
   function toCanvas(e) {
     const r = view.getBoundingClientRect();
     return {
@@ -201,49 +331,105 @@
 
   function commitPixelEdit(edit) {
     const p = state.project;
-    const ctx = edit.c.getContext('2d');
-    const after = ctx.getImageData(0, 0, p.width, p.height);
+    const after = edit.c.getContext('2d').getImageData(0, 0, p.width, p.height);
     const { c, before } = edit;
-    const frame = state.frame, layerId = activeLayer().id;
+    const layerId = activeLayer().id;
     const apply = (img) => {
       c.getContext('2d').putImageData(img, 0, 0);
       touch(c);
       const li = p.layerIndex(layerId);
       if (li >= 0) updateCelThumb(li, p.layers[li].cels.indexOf(c));
+      if (state.motion) state.motion.bounds = null;
       changed();
     };
     p.push({ undo: () => apply(before), redo: () => apply(after) });
     touch(c);
-    updateCelThumb(state.layer, frame);
+    if (state.motion) state.motion.bounds = null;
+    updateCelThumb(state.layer, state.frame);
     changed();
   }
 
+  // Two-finger pinch zoom on touch screens.
+  const touches = new Map();
+  let pinch = null;
+
   function onPointerDown(e) {
     if (!state.project || state.playing) return;
+    $('coach').hidden = true;
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) {
+        cancelStroke();
+        const [a, b] = [...touches.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: state.zoom };
+        return;
+      }
+    }
+    if (e.button === 1 || state.tool === 'hand') { startPan(e); return; }
     if (e.button !== undefined && e.button > 0) return;
-    const layer = activeLayer();
-    if (!layer.visible) { toast('This layer is hidden. Show it to draw.'); return; }
     const pt = toCanvas(e);
+    if (state.motion) { setMotionTarget(pt); view.setPointerCapture(e.pointerId); state.drag = { kind: 'motion', id: e.pointerId }; return; }
+    const layer = activeLayer();
+    if (!layer.visible) { toast('This layer is hidden. Show it to draw on it.'); return; }
     if (state.tool === 'picker') { pickColor(pt); return; }
     if (state.tool === 'fill') { floodFill(pt); return; }
     view.setPointerCapture(e.pointerId);
-    const sctx = strokeCanvas.getContext('2d');
-    sctx.clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
-    state.stroke = { tool: state.tool, pts: [pt], live: true, id: e.pointerId };
+    if (state.tool === 'move') {
+      const edit = beginPixelEdit();
+      const src = makeCanvas(view.width, view.height);
+      src.getContext('2d').drawImage(edit.c, 0, 0);
+      state.drag = { kind: 'move', id: e.pointerId, edit, src, x0: pt.x, y0: pt.y };
+      return;
+    }
+    strokeCanvas.getContext('2d').clearRect(0, 0, strokeCanvas.width, strokeCanvas.height);
+    state.stroke = { tool: state.tool, pts: [pt], id: e.pointerId };
     dab(pt);
     requestRender();
   }
 
   function onPointerMove(e) {
+    if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        setZoom(pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, pinch.d));
+        return;
+      }
+    }
     moveCursor(e);
+    const d = state.drag;
+    if (d && e.pointerId === d.id) {
+      if (d.kind === 'pan') {
+        const stage = $('stage');
+        stage.scrollLeft = d.sl - (e.clientX - d.x);
+        stage.scrollTop = d.st - (e.clientY - d.y);
+      } else if (d.kind === 'move') {
+        const pt = toCanvas(e);
+        const ctx = d.edit.c.getContext('2d');
+        ctx.clearRect(0, 0, view.width, view.height);
+        ctx.drawImage(d.src, Math.round(pt.x - d.x0), Math.round(pt.y - d.y0));
+        requestRender();
+      } else if (d.kind === 'motion') {
+        setMotionTarget(toCanvas(e));
+      }
+      return;
+    }
     const s = state.stroke;
     if (!s || e.pointerId !== s.id) return;
-    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     for (const ev of (events.length ? events : [e])) segment(toCanvas(ev));
     requestRender();
   }
 
   function onPointerUp(e) {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    const d = state.drag;
+    if (d && e.pointerId === d.id) {
+      state.drag = null;
+      if (d.kind === 'move') { commitPixelEdit(d.edit); render(); }
+      return;
+    }
     const s = state.stroke;
     if (!s || e.pointerId !== s.id) return;
     finishStroke();
@@ -252,6 +438,21 @@
     state.stroke = null;
     commitPixelEdit(edit);
     render();
+  }
+
+  function cancelStroke() {
+    if (state.stroke) { state.stroke = null; requestRender(); }
+    if (state.drag && state.drag.kind === 'move') {
+      state.drag.edit.c.getContext('2d').putImageData(state.drag.edit.before, 0, 0);
+      state.drag = null;
+      requestRender();
+    }
+  }
+
+  function startPan(e) {
+    const stage = $('stage');
+    view.setPointerCapture(e.pointerId);
+    state.drag = { kind: 'pan', id: e.pointerId, x: e.clientX, y: e.clientY, sl: stage.scrollLeft, st: stage.scrollTop };
   }
 
   function strokeStyle(ctx) {
@@ -302,17 +503,23 @@
     ctx.stroke();
   }
 
+  const TOOL_CURSORS = { fill: 'crosshair', picker: 'crosshair', move: 'move', hand: 'grab' };
   function moveCursor(e) {
     const cur = $('cursor');
-    if (!state.project || state.tool === 'fill' || state.tool === 'picker') { cur.hidden = true; view.style.cursor = 'crosshair'; return; }
+    const showRing = !state.motion && (state.tool === 'brush' || state.tool === 'eraser') && e.pointerType !== 'touch';
+    if (!state.project || !showRing) {
+      cur.hidden = true;
+      view.style.cursor = state.motion ? 'crosshair' : (TOOL_CURSORS[state.tool] || 'crosshair');
+      return;
+    }
     view.style.cursor = 'none';
     const r = view.getBoundingClientRect();
-    const sr = $('stage').getBoundingClientRect();
+    const wr = $('stageWrap').getBoundingClientRect();
     const d = Math.max(4, state.size * (r.width / view.width));
     cur.hidden = false;
     cur.style.width = cur.style.height = d + 'px';
-    cur.style.left = e.clientX - sr.left + 'px';
-    cur.style.top = e.clientY - sr.top + 'px';
+    cur.style.left = e.clientX - wr.left + 'px';
+    cur.style.top = e.clientY - wr.top + 'px';
   }
 
   function pickColor(pt) {
@@ -382,6 +589,152 @@
     render();
   }
 
+  /* ================= motion (auto in-betweens) ================= */
+  const EASE = {
+    linear: (t) => t,
+    in: (t) => t * t * t,
+    out: (t) => 1 - Math.pow(1 - t, 3),
+    inout: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+    back: (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+    bounce: (t) => {
+      const n = 7.5625, d = 2.75;
+      if (t < 1 / d) return n * t * t;
+      if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75;
+      if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375;
+      return n * (t -= 2.625 / d) * t + 0.984375;
+    },
+  };
+
+  function contentBounds(c) {
+    if (!c) return null;
+    const { width: w, height: h } = c;
+    const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+
+  function motionOpts() {
+    const num = (id, def) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : def; };
+    return {
+      frames: Math.max(2, Math.min(60, Math.round(num('mFrames', 8)))),
+      dx: num('mX', 0), dy: num('mY', 0),
+      scale: Math.max(0.05, num('mScale', 100) / 100),
+      rot: num('mRot', 0),
+      fade: Math.max(0, Math.min(1, num('mFade', 100) / 100)),
+      ease: EASE[$('mEase').value] || EASE.inout,
+      hold: $('mHold').checked,
+    };
+  }
+
+  function motionSource() {
+    const m = state.motion;
+    const c = state.project.layers[state.layer].cels[state.frame];
+    const key = state.layer + ':' + state.frame;
+    if (!m.bounds || m.key !== key) { m.key = key; m.bounds = contentBounds(c); }
+    return m.bounds ? { c, b: m.bounds } : null;
+  }
+
+  function drawTransformed(ctx, src, b, o, t) {
+    const e = o.ease(t);
+    ctx.save();
+    ctx.globalAlpha *= 1 + (o.fade - 1) * e;
+    ctx.translate(b.cx + o.dx * e, b.cy + o.dy * e);
+    ctx.rotate((o.rot * e * Math.PI) / 180);
+    const s = 1 + (o.scale - 1) * e;
+    ctx.scale(s, s);
+    ctx.drawImage(src, -b.cx, -b.cy);
+    ctx.restore();
+  }
+
+  function drawMotionPreview() {
+    const s = motionSource();
+    if (!s) return;
+    const o = motionOpts();
+    const steps = Math.min(o.frames, 6);
+    for (let k = 1; k <= steps; k++) {
+      vctx.globalAlpha = k === steps ? 0.55 : 0.14;
+      drawTransformed(vctx, s.c, s.b, o, k / steps);
+    }
+    vctx.globalAlpha = 1;
+    // path
+    vctx.save();
+    vctx.strokeStyle = '#9b7bff';
+    vctx.lineWidth = Math.max(2, view.width / 400);
+    vctx.setLineDash([10, 8]);
+    vctx.beginPath();
+    for (let k = 0; k <= 24; k++) {
+      const e = o.ease(k / 24);
+      const x = s.b.cx + o.dx * e, y = s.b.cy + o.dy * e;
+      k ? vctx.lineTo(x, y) : vctx.moveTo(x, y);
+    }
+    vctx.stroke();
+    vctx.setLineDash([]);
+    vctx.fillStyle = '#9b7bff';
+    vctx.beginPath(); vctx.arc(s.b.cx + o.dx, s.b.cy + o.dy, Math.max(6, view.width / 120), 0, Math.PI * 2); vctx.fill();
+    vctx.restore();
+  }
+
+  function setMotionTarget(pt) {
+    const s = motionSource();
+    if (!s) return;
+    $('mX').value = Math.round(pt.x - s.b.cx);
+    $('mY').value = Math.round(pt.y - s.b.cy);
+    requestRender();
+  }
+
+  function openMotion() {
+    if (!state.project) return;
+    stopPlayback();
+    state.motion = { bounds: null, key: '' };
+    if (!motionSource()) {
+      state.motion = null;
+      toast('Draw something on the selected layer first, then use Motion to animate it.');
+      return;
+    }
+    $('motionPanel').hidden = false;
+    $('motionBtn').classList.add('on');
+    $('cursor').hidden = true;
+    render();
+  }
+  function closeMotion() {
+    state.motion = null;
+    $('motionPanel').hidden = true;
+    $('motionBtn').classList.remove('on');
+    if (state.project) render();
+  }
+
+  function applyMotion() {
+    const s = motionSource();
+    if (!s) return;
+    const o = motionOpts();
+    const p = state.project, f = state.frame, li = state.layer;
+    const src = makeCanvas(p.width, p.height);
+    src.getContext('2d').drawImage(s.c, 0, 0);
+    const b = s.b;
+    structural(() => {
+      for (let k = 1; k <= o.frames; k++) {
+        p.insertFrame(f + k, o.hold ? f : undefined);
+        const c = makeCanvas(p.width, p.height);
+        drawTransformed(c.getContext('2d'), src, b, o, k / o.frames);
+        p.layers[li].cels[f + k] = c;
+      }
+      state.frame = f;
+    }, () => {
+      for (let k = 0; k < o.frames; k++) p.removeFrame(f + 1);
+      state.frame = f;
+    });
+    closeMotion();
+    toast(`Added ${o.frames} frames of motion. Press Space to play.`);
+  }
+
   /* ================= timeline ================= */
   const THUMB_W = 72;
   function thumbH() { return Math.round(THUMB_W * state.project.height / state.project.width); }
@@ -390,15 +743,17 @@
     const p = state.project;
     const tracks = $('tracks');
     tracks.innerHTML = '';
-    tracks.style.gridTemplateColumns = `132px repeat(${p.frameCount}, ${THUMB_W}px)`;
-    // header row
-    tracks.appendChild(document.createElement('div'));
+    tracks.style.gridTemplateColumns = `150px repeat(${p.frameCount}, ${THUMB_W}px)`;
+    const corner = document.createElement('div');
+    corner.className = 'corner';
+    corner.textContent = 'Layers';
+    tracks.appendChild(corner);
     for (let f = 0; f < p.frameCount; f++) {
-      const n = document.createElement('div');
+      const n = document.createElement('button');
       n.className = 'frame-num' + (f === state.frame ? ' current' : '');
       n.textContent = f + 1;
       n.dataset.frame = f;
-      n.addEventListener('click', () => goTo(f));
+      n.addEventListener('click', () => { stopPlayback(); goTo(f); });
       tracks.appendChild(n);
     }
     // layers, top layer first
@@ -406,14 +761,14 @@
       const l = p.layers[li];
       const head = document.createElement('div');
       head.className = 'track-head' + (li === state.layer ? ' active' : '');
-      head.innerHTML = `<button class="eye${l.visible ? '' : ' off'}" title="Show / hide">👁</button><span class="lname"></span>`;
+      head.innerHTML = `<button class="eye${l.visible ? '' : ' off'}" title="${l.visible ? 'Hide' : 'Show'} layer" aria-label="${l.visible ? 'Hide' : 'Show'} layer"><svg><use href="#i-${l.visible ? 'eye' : 'eye-off'}"/></svg></button><span class="lname"></span>`;
       head.querySelector('.lname').textContent = l.name;
       head.title = 'Click to select, double-click to rename';
       head.addEventListener('click', (e) => {
-        if (e.target.classList.contains('eye')) {
+        if (e.target.closest('.eye')) {
           l.visible = !l.visible; changed(); buildTimeline(); render(); return;
         }
-        state.layer = li; buildTimeline();
+        state.layer = li; buildTimeline(); render();
       });
       head.addEventListener('dblclick', () => {
         const name = prompt('Layer name', l.name);
@@ -428,14 +783,22 @@
         cel.setAttribute('aria-label', `${l.name}, frame ${f + 1}`);
         const tc = makeCanvas(THUMB_W * 2, thumbH() * 2);
         cel.appendChild(tc);
-        cel.addEventListener('click', () => { state.layer = li; goTo(f); });
+        cel.addEventListener('click', () => { stopPlayback(); state.layer = li; goTo(f); });
         tracks.appendChild(cel);
         drawThumb(tc, l.cels[f]);
       }
     }
     updateButtons();
-    const cur = tracks.querySelector('.frame-num.current');
-    if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    scrollToCurrent();
+  }
+
+  function scrollToCurrent() {
+    const cur = $('tracks').querySelector('.frame-num.current');
+    if (!cur) return;
+    const wrap = document.querySelector('.tracks-wrap');
+    const left = cur.offsetLeft - 150, right = cur.offsetLeft + cur.offsetWidth;
+    if (left < wrap.scrollLeft) wrap.scrollLeft = left;
+    else if (right > wrap.scrollLeft + wrap.clientWidth) wrap.scrollLeft = right - wrap.clientWidth;
   }
 
   function drawThumb(tc, cel) {
@@ -464,8 +827,7 @@
       c.classList.toggle('selected', fr === state.frame && +c.dataset.layer === state.layer);
     });
     tracks.querySelectorAll('.track-head').forEach((h, i) => h.classList.toggle('active', p.layers.length - 1 - i === state.layer));
-    const cur = tracks.querySelector('.frame-num.current');
-    if (cur && !state.playing) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    scrollToCurrent();
     updateButtons();
     render();
   }
@@ -489,7 +851,6 @@
   function deleteFrame() {
     const p = state.project;
     if (p.frameCount <= 1) {
-      // clear instead of delete the last frame
       const removed = p.layers.map((l) => l.cels[0]);
       structural(() => p.layers.forEach((l) => { l.cels[0] = null; }),
         () => p.layers.forEach((l, i) => { l.cels[0] = removed[i]; }));
@@ -519,7 +880,7 @@
 
   function deleteLayer() {
     const p = state.project;
-    if (p.layers.length <= 1) { toast('A loop needs at least one layer.'); return; }
+    if (p.layers.length <= 1) { toast('An animation needs at least one layer.'); return; }
     const at = state.layer;
     const layer = p.layers[at];
     structural(
@@ -527,21 +888,34 @@
       () => { p.layers.splice(at, 0, layer); state.layer = at; });
   }
 
+  function moveLayer(dir) {
+    const p = state.project, a = state.layer, b = a + dir;
+    if (b < 0 || b >= p.layers.length) return;
+    const swap = () => { const t = p.layers[a]; p.layers[a] = p.layers[b]; p.layers[b] = t; };
+    structural(() => { swap(); state.layer = b; }, () => { swap(); state.layer = a; });
+  }
+
   function updateButtons() {
     const p = state.project;
+    if (!p) return;
     $('undoBtn').disabled = !p.undoStack.length;
     $('redoBtn').disabled = !p.redoStack.length;
     $('moveLeftBtn').disabled = state.frame === 0;
     $('moveRightBtn').disabled = state.frame === p.frameCount - 1;
+    $('layerUpBtn').disabled = state.layer === p.layers.length - 1;
+    $('layerDownBtn').disabled = state.layer === 0;
   }
 
   /* ================= playback ================= */
   let playRaf = 0, lastTick = 0, acc = 0;
   function togglePlay() { state.playing ? stopPlayback() : startPlayback(); }
   function startPlayback() {
-    if (!state.project || state.project.frameCount < 2) { toast('Add a second frame to play.'); return; }
+    if (!state.project || state.project.frameCount < 2) { toast('Add a second frame to play your animation.'); return; }
+    closeMotion();
+    cancelStroke();
+    if (!state.loop && state.frame === state.project.frameCount - 1) state.frame = 0;
     state.playing = true;
-    $('playBtn').textContent = '❚❚'; $('playBtn').classList.add('playing');
+    $('playIcon').setAttribute('href', '#i-pause'); $('playBtn').classList.add('playing');
     lastTick = performance.now(); acc = 0;
     const tick = (now) => {
       if (!state.playing) return;
@@ -549,6 +923,7 @@
       const step = 1000 / state.project.fps;
       if (acc >= step) {
         acc %= step;
+        if (!state.loop && state.frame === state.project.frameCount - 1) { stopPlayback(); return; }
         state.frame = (state.frame + 1) % state.project.frameCount;
         goTo(state.frame);
       }
@@ -560,7 +935,7 @@
     if (!state.playing) return;
     state.playing = false;
     cancelAnimationFrame(playRaf);
-    $('playBtn').textContent = '▶'; $('playBtn').classList.remove('playing');
+    $('playIcon').setAttribute('href', '#i-play'); $('playBtn').classList.remove('playing');
     render();
   }
 
@@ -581,7 +956,7 @@
     if (!p) return;
     try {
       await api.save(p.serialize());
-      if (state.project === p) setSaveState('Saved to this device');
+      if (state.project === p) setSaveState('All changes saved');
     } catch (e) {
       console.error(e);
       setSaveState('Not saved');
@@ -599,7 +974,39 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
-  const safeName = () => (state.project.name || 'loop').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'loop';
+  const safeName = () => (state.project.name || 'animation').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'animation';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function exportVideo(p) {
+    const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mime = window.MediaRecorder && types.find((t) => MediaRecorder.isTypeSupported(t));
+    if (!mime) { toast('Video export is not supported in this browser. Try GIF instead.'); return; }
+    const scale = Math.min(1, 1280 / Math.max(p.width, p.height));
+    const w = Math.round(p.width * scale / 2) * 2, h = Math.round(p.height * scale / 2) * 2;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d');
+    const full = makeCanvas(p.width, p.height);
+    const draw = (f) => { p.renderFrame(full.getContext('2d'), f); ctx.drawImage(full, 0, 0, w, h); };
+    draw(0);
+    const stream = c.captureStream(p.fps);
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5e6 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((r) => { rec.onstop = r; });
+    const loops = Math.max(1, Math.ceil(3 / (p.frameCount / p.fps))); // at least ~3 seconds
+    toast('Recording your video…');
+    rec.start();
+    const step = 1000 / p.fps, t0 = performance.now();
+    for (let i = 0; i < loops * p.frameCount; i++) {
+      draw(i % p.frameCount);
+      await wait(Math.max(0, t0 + (i + 1) * step - performance.now()));
+    }
+    rec.stop();
+    await done;
+    const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+    download(new Blob(chunks, { type: mime.split(';')[0] }), `${safeName()}.${ext}`);
+    toast(`Video saved as .${ext}.`);
+  }
 
   async function exportAs(kind) {
     const p = state.project;
@@ -620,12 +1027,13 @@
       c.toBlob((b) => { download(b, `${safeName()}-sheet.png`); toast('Sprite sheet saved.'); });
     } else if (kind === 'json') {
       await saveNow();
-      const data = p.serialize();
-      download(new Blob([JSON.stringify(data)], { type: 'application/json' }), `${safeName()}.loomframe.json`);
+      download(new Blob([JSON.stringify(p.serialize())], { type: 'application/json' }), `${safeName()}.loomframe.json`);
       toast('Project file saved.');
+    } else if (kind === 'video') {
+      await exportVideo(p);
     } else if (kind === 'gif') {
-      toast('Weaving your GIF…');
-      await new Promise((r) => setTimeout(r, 30));
+      toast('Creating your GIF…');
+      await wait(30);
       const scale = Math.min(1, 640 / Math.max(p.width, p.height));
       const w = Math.round(p.width * scale), h = Math.round(p.height * scale);
       const full = makeCanvas(p.width, p.height);
@@ -639,7 +1047,7 @@
       }
       const bytes = gif.encode(frames, w, h, p.fps);
       download(new Blob([bytes], { type: 'image/gif' }), `${safeName()}.gif`);
-      toast('Your loop is ready.');
+      toast('Your GIF is ready.');
     }
   }
 
@@ -659,23 +1067,42 @@
     $('sizeInput').value = state.size;
     $('sizeVal').textContent = state.size;
   }
+  function toggleOnion() {
+    state.onion = !state.onion;
+    $('onionBtn').classList.toggle('on', state.onion);
+    render();
+  }
+  function toggleLoop() {
+    state.loop = !state.loop;
+    $('loopBtn').classList.toggle('on', state.loop);
+  }
+  function openHelp() { $('helpModal').hidden = false; $('helpModal').querySelector('[data-close]').focus(); }
+  function closeHelp() { $('helpModal').hidden = true; }
 
   function undo() { if (state.project && state.project.undo()) { render(); updateButtons(); } }
   function redo() { if (state.project && state.project.redo()) { render(); updateButtons(); } }
 
   /* ================= wiring ================= */
   function wire() {
-    $('newBtn').addEventListener('click', newProject);
+    window.addEventListener('hashchange', route);
     $('importInput').addEventListener('change', (e) => { if (e.target.files[0]) importProject(e.target.files[0]); e.target.value = ''; });
-    $('backBtn').addEventListener('click', showGallery);
-    $('projName').addEventListener('input', (e) => { state.project.name = e.target.value || 'Untitled loop'; changed(); });
+    $('projName').addEventListener('input', (e) => {
+      state.project.name = e.target.value || 'Untitled animation';
+      document.title = state.project.name + ' · Loomframe';
+      changed();
+    });
 
     view.addEventListener('pointerdown', onPointerDown);
     view.addEventListener('pointermove', onPointerMove);
     view.addEventListener('pointerup', onPointerUp);
-    view.addEventListener('pointercancel', onPointerUp);
+    view.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); pinch = null; onPointerUp(e); });
     view.addEventListener('pointerleave', () => { $('cursor').hidden = true; });
     view.addEventListener('contextmenu', (e) => e.preventDefault());
+    $('stage').addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setZoom(state.zoom * Math.exp(-e.deltaY * 0.01));
+    }, { passive: false });
 
     document.querySelectorAll('.tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
     $('colorInput').addEventListener('input', (e) => setColor(e.target.value));
@@ -683,15 +1110,22 @@
     for (const c of SWATCHES) {
       const b = document.createElement('button');
       b.className = 'swatch'; b.style.background = c; b.dataset.color = c; b.title = c;
+      b.setAttribute('aria-label', 'Colour ' + c);
       b.addEventListener('click', () => { setColor(c); if (state.tool !== 'fill') setTool('brush'); });
       sw.appendChild(b);
     }
     $('sizeInput').addEventListener('input', (e) => setSize(+e.target.value));
     $('opInput').addEventListener('input', (e) => { state.opacity = e.target.value / 100; $('opVal').textContent = e.target.value + '%'; });
     $('bgInput').addEventListener('input', (e) => { state.project.bg = e.target.value; render(); buildTimeline(); changed(); });
+    $('onionRange').addEventListener('input', (e) => { state.onionDepth = +e.target.value; render(); });
 
     $('undoBtn').addEventListener('click', undo);
     $('redoBtn').addEventListener('click', redo);
+    $('helpBtn').addEventListener('click', openHelp);
+    $('helpBtn2').addEventListener('click', openHelp);
+    $('helpModal').addEventListener('click', (e) => { if (e.target === $('helpModal') || e.target.closest('[data-close]')) closeHelp(); });
+    $('coachClose').addEventListener('click', () => { $('coach').hidden = true; store.set('loomframe:coach', '1'); });
+
     $('prevBtn').addEventListener('click', () => { stopPlayback(); goTo(state.frame - 1); });
     $('nextBtn').addEventListener('click', () => { stopPlayback(); goTo(state.frame + 1); });
     $('playBtn').addEventListener('click', togglePlay);
@@ -700,6 +1134,7 @@
       e.target.value = v; state.project.fps = v; changed();
     });
     $('onionBtn').addEventListener('click', toggleOnion);
+    $('loopBtn').addEventListener('click', toggleLoop);
     $('addFrameBtn').addEventListener('click', () => { stopPlayback(); addFrame(false); });
     $('dupFrameBtn').addEventListener('click', () => { stopPlayback(); addFrame(true); });
     $('delFrameBtn').addEventListener('click', () => { stopPlayback(); deleteFrame(); });
@@ -707,49 +1142,71 @@
     $('moveRightBtn').addEventListener('click', () => moveFrame(1));
     $('addLayerBtn').addEventListener('click', addLayer);
     $('delLayerBtn').addEventListener('click', deleteLayer);
+    $('layerUpBtn').addEventListener('click', () => moveLayer(1));
+    $('layerDownBtn').addEventListener('click', () => moveLayer(-1));
+
+    $('motionBtn').addEventListener('click', () => (state.motion ? closeMotion() : openMotion()));
+    $('motionClose').addEventListener('click', closeMotion);
+    $('motionApply').addEventListener('click', applyMotion);
+    $('motionPanel').addEventListener('input', () => requestRender());
+
+    $('zoomIn').addEventListener('click', () => setZoom(state.zoom * 1.25));
+    $('zoomOut').addEventListener('click', () => setZoom(state.zoom / 1.25));
+    $('zoomLabel').addEventListener('click', () => { state.zoom = 1; fitStage(); });
 
     $('exportBtn').addEventListener('click', (e) => { e.stopPropagation(); $('exportMenu').hidden = !$('exportMenu').hidden; });
     $('exportMenu').addEventListener('click', (e) => {
-      const k = e.target.dataset.export;
-      if (!k) return;
+      const btn = e.target.closest('[data-export]');
+      if (!btn) return;
       $('exportMenu').hidden = true;
-      exportAs(k);
+      exportAs(btn.dataset.export);
     });
     document.addEventListener('click', () => { $('exportMenu').hidden = true; });
 
-    window.addEventListener('resize', fitStage);
-    if ('ResizeObserver' in window) new ResizeObserver(fitStage).observe($('stage'));
+    window.addEventListener('resize', () => fitStage());
+    if ('ResizeObserver' in window) new ResizeObserver(() => fitStage()).observe($('stage'));
     window.addEventListener('beforeunload', () => { if (saveTimer) saveNow(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) saveNow(); });
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    window.addEventListener('error', (e) => { console.error(e.error || e.message); toast('Something went wrong. Your last save is safe.'); });
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
     document.addEventListener('keydown', onKey);
     setColor(state.color);
     setSize(state.size);
   }
 
-  function toggleOnion() {
-    state.onion = !state.onion;
-    $('onionBtn').classList.toggle('on', state.onion);
-    render();
-  }
-
   function onKey(e) {
+    if (!$('helpModal').hidden) { if (e.key === 'Escape') closeHelp(); return; }
     if (!state.project || $('studio').hidden) return;
     const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'input' && e.target.type !== 'range' && e.target.type !== 'color') return;
+    if ((tag === 'input' && !['range', 'color', 'checkbox'].includes(e.target.type)) || tag === 'select' || tag === 'textarea') return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); toast('Saved to this device.'); return; }
+    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); toast('All changes saved.'); return; }
     if (mod) return;
     switch (e.key) {
       case 'b': case 'B': setTool('brush'); break;
       case 'e': case 'E': setTool('eraser'); break;
       case 'g': case 'G': setTool('fill'); break;
       case 'i': case 'I': setTool('picker'); break;
+      case 'v': case 'V': setTool('move'); break;
+      case 'h': case 'H': setTool('hand'); break;
       case 'o': case 'O': toggleOnion(); break;
+      case 'l': case 'L': toggleLoop(); break;
+      case 'm': case 'M': state.motion ? closeMotion() : openMotion(); break;
       case 'n': case 'N': stopPlayback(); addFrame(false); break;
       case 'd': case 'D': stopPlayback(); addFrame(true); break;
+      case 'Delete': case 'Backspace': stopPlayback(); deleteFrame(); break;
       case '[': setSize(state.size - (state.size > 10 ? 4 : 1)); break;
       case ']': setSize(state.size + (state.size >= 10 ? 4 : 1)); break;
+      case '+': case '=': setZoom(state.zoom * 1.25); break;
+      case '-': case '_': setZoom(state.zoom / 1.25); break;
+      case '0': state.zoom = 1; fitStage(); break;
+      case '?': openHelp(); break;
+      case 'Escape': if (state.motion) closeMotion(); break;
       case ' ': e.preventDefault(); togglePlay(); break;
       case 'ArrowLeft': case ',': e.preventDefault(); stopPlayback(); goTo(state.frame - 1); break;
       case 'ArrowRight': case '.': e.preventDefault(); stopPlayback(); goTo(state.frame + 1); break;
@@ -758,6 +1215,6 @@
   }
 
   wire();
-  showGallery();
+  route();
   window.LF.state = state; // handy for debugging in the console
 })();

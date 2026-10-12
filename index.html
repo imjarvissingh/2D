@@ -3,91 +3,227 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Loomframe</title>
-  <meta name="description" content="Loomframe: a free, offline, frame-by-frame animation studio. Draw it. Flip it. Loop it.">
+  <title>Loomframe · Hand-drawn animation in your browser</title>
+  <meta name="description" content="Loomframe is a free, offline 2D animation studio. Draw frame by frame, add motion in one click, and export GIFs and video. No install, no account.">
+  <meta property="og:title" content="Loomframe · Hand-drawn animation in your browser">
+  <meta property="og:description" content="Draw it. Flip it. Loop it. A free 2D animation studio that runs anywhere.">
+  <meta name="theme-color" content="#16141f">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='14' width='34' height='38' rx='7' fill='%232EC4B6'/%3E%3Crect x='16' y='10' width='34' height='38' rx='7' fill='%23FFB627'/%3E%3Crect x='26' y='6' width='34' height='38' rx='7' fill='%23FF6B4A'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
+  <!-- Icon sprite -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <symbol id="logo" viewBox="0 0 64 64">
-      <rect x="6" y="16" width="32" height="38" rx="7" fill="#2EC4B6"/>
-      <rect x="16" y="11" width="32" height="38" rx="7" fill="#FFB627"/>
-      <rect x="26" y="6" width="32" height="38" rx="7" fill="#FF6B4A"/>
-      <path d="M8 46 C 22 30, 34 52, 56 18" stroke="#F7F2E8" stroke-width="4.5" fill="none" stroke-linecap="round"/>
-    </symbol>
+    <defs>
+      <symbol id="logo" viewBox="0 0 64 64">
+        <rect x="6" y="16" width="32" height="38" rx="7" fill="#2EC4B6"/>
+        <rect x="16" y="11" width="32" height="38" rx="7" fill="#FFB627"/>
+        <rect x="26" y="6" width="32" height="38" rx="7" fill="#FF6B4A"/>
+        <path d="M8 46 C 22 30, 34 52, 56 18" stroke="#F7F2E8" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="i-brush" viewBox="0 0 24 24"><path d="M4 20c2.2 0 4.2-1 4.2-3.2 0-1.6-1.2-2.8-2.8-2.8C3.6 14 3 16.5 4 20z" fill="currentColor"/><path d="M9.5 13.5 19 4l1.5 1.5-9.5 9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M3.5 15.5 13 6l5.5 5.5L10 20H6.5zM10 20h10.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+      <symbol id="i-fill" viewBox="0 0 24 24"><path d="M4.5 11 11 4.5l7 7L11.5 18z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M19.5 14.5s2 2.4 2 3.9a2 2 0 0 1-4 0c0-1.5 2-3.9 2-3.9z" fill="currentColor"/></symbol>
+      <symbol id="i-picker" viewBox="0 0 24 24"><path d="m14 4.5 5.5 5.5-2 2L12 6.5zM12.5 8 4.5 16v3.5H8l8-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 12V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6.5 7-2.6 0-4-1.3-5.4-3.5L3.6 13.6a1.5 1.5 0 0 1 2.4-1.7L8 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></symbol>
+      <symbol id="i-prev" viewBox="0 0 24 24"><path d="M17 6v12l-8.5-6zM6 6v12" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="M7 6v12l8.5-6zM18 6v12" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7 4.5 11.5 9 16M5 11.5h9.5a5 5 0 0 1 0 10H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 7 4.5 4.5L15 16M19 11.5H9.5a5 5 0 0 0 0 10H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 5.5A2 2 0 0 0 14 4H6a2 2 0 0 0-2 2v8a2 2 0 0 0 1.5 2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-motion" viewBox="0 0 24 24"><circle cx="17" cy="12" r="4" fill="currentColor"/><path d="M3 9h7M2 12h8M3 15h7" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/></symbol>
+      <symbol id="i-onion" viewBox="0 0 24 24"><circle cx="9" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.8" opacity=".55"/><circle cx="15" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-zoom-in" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5M10.5 7.5v6M7.5 10.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-zoom-out" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5M7.5 10.5h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 9 5-9 5-9-5zM3 14l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-offline" viewBox="0 0 24 24"><path d="M12 3 4 6.5V12c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" stroke="currentColor" stroke-width="1.6"/></symbol>
+    </defs>
   </svg>
 
-  <!-- ===== Gallery ===== -->
-  <section id="gallery" class="view">
-    <header class="gallery-head">
-      <div class="brand">
-        <svg class="logo"><use href="#logo"/></svg>
-        <div>
-          <h1>Loomframe</h1>
-          <p class="tagline">Draw it. Flip it. Loop it.</p>
+  <!-- ===================== Landing ===================== -->
+  <section id="home" class="view home" hidden>
+    <nav class="site-nav">
+      <a class="brand" href="#/"><svg class="logo"><use href="#logo"/></svg><span>Loomframe</span></a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#/projects">My projects</a>
+      </div>
+      <a class="btn primary" href="#/new">Start animating</a>
+    </nav>
+
+    <header class="hero">
+      <div class="hero-copy">
+        <span class="pill">Free · Offline · No sign-up</span>
+        <h1>Hand-drawn animation,<br><span class="grad">right in your browser.</span></h1>
+        <p class="lead">Loomframe is a 2D animation studio for sketchers, students and storytellers. Draw frame by frame with onion skin, add motion in one click, and export a GIF or video in seconds.</p>
+        <div class="cta-row">
+          <a class="btn primary lg" href="#/new">Start animating</a>
+          <a class="btn ghost lg" href="#/sample">Open the sample scene</a>
+        </div>
+        <ul class="proof">
+          <li><svg><use href="#i-offline"/></svg>Your work never leaves your device</li>
+          <li><svg><use href="#i-globe"/></svg>Works on laptop, tablet and phone</li>
+        </ul>
+      </div>
+      <div class="hero-demo" aria-label="Animated preview of a Loomframe project">
+        <div class="demo-chrome">
+          <div class="demo-bar"><i></i><i></i><i></i><span>Bounce.loom</span></div>
+          <canvas id="heroCanvas" width="960" height="540"></canvas>
+          <div id="heroStrip" class="demo-strip"></div>
         </div>
       </div>
-      <div class="gallery-actions">
-        <select id="newSize" aria-label="Canvas size">
-          <option value="960x540">Wide 960×540</option>
-          <option value="720x720">Square 720×720</option>
-          <option value="540x960">Tall 540×960</option>
-        </select>
-        <button id="newBtn" class="btn primary">+ New loop</button>
-        <label class="btn ghost" title="Import a .loomframe.json file">
-          Import<input id="importInput" type="file" accept=".json,application/json" hidden>
-        </label>
-      </div>
     </header>
-    <div id="shelf" class="shelf"></div>
-    <p id="emptyShelf" class="empty" hidden>Your shelf is empty. Start a loop.</p>
-    <footer class="foot">Everything is saved on this device. No account, no cloud.</footer>
+
+    <section id="features" class="section">
+      <h2>Everything you need to bring a drawing to life</h2>
+      <p class="section-sub">Built around how animators actually work, without the clutter.</p>
+      <div class="feature-grid">
+        <article class="feature"><svg><use href="#i-brush"/></svg><h3>Pressure-aware brushes</h3><p>Smooth, responsive ink that follows your stylus pressure, plus eraser, paint bucket and colour picker.</p></article>
+        <article class="feature"><svg><use href="#i-onion"/></svg><h3>Onion skin</h3><p>See the previous and next frames as coloured ghosts, so every drawing lines up with the last.</p></article>
+        <article class="feature"><svg><use href="#i-motion"/></svg><h3>One-click motion</h3><p>Slide, spin, scale or fade any drawing over time with easing. Loomframe draws the in-betweens for you.</p></article>
+        <article class="feature"><svg><use href="#i-layers"/></svg><h3>Layers and timeline</h3><p>Separate backgrounds, characters and effects. Duplicate, reorder and preview frames on a visual timeline.</p></article>
+        <article class="feature"><svg><use href="#i-film"/></svg><h3>Export anywhere</h3><p>Share as an animated GIF or video, or hand off a sprite sheet to your game engine.</p></article>
+        <article class="feature"><svg><use href="#i-offline"/></svg><h3>Private by design</h3><p>No account and no cloud. Projects autosave on your device and move between devices as a single file.</p></article>
+      </div>
+    </section>
+
+    <section id="how" class="section">
+      <h2>From sketch to loop in three steps</h2>
+      <div class="steps">
+        <div class="step"><b>1</b><h3>Draw</h3><p>Sketch your first pose on a clean canvas.</p></div>
+        <div class="step"><b>2</b><h3>Flip</h3><p>Add frames, trace with onion skin, or let Motion animate it for you.</p></div>
+        <div class="step"><b>3</b><h3>Loop</h3><p>Hit play, tune the speed, and export a GIF or video.</p></div>
+      </div>
+    </section>
+
+    <section class="section cta-band">
+      <h2>Your next loop is a click away.</h2>
+      <p class="section-sub">Nothing to install. It works offline once the page loads.</p>
+      <div class="cta-row center">
+        <a class="btn primary lg" href="#/new">Start animating</a>
+        <a class="btn ghost lg" href="#/sample">Open the sample scene</a>
+      </div>
+    </section>
+
+    <footer class="site-foot">
+      <span><svg class="logo small"><use href="#logo"/></svg> Loomframe</span>
+      <span>Draw it. Flip it. Loop it.</span>
+    </footer>
   </section>
 
-  <!-- ===== Studio ===== -->
+  <!-- ===================== Projects ===================== -->
+  <section id="gallery" class="view" hidden>
+    <nav class="site-nav">
+      <a class="brand" href="#/"><svg class="logo"><use href="#logo"/></svg><span>Loomframe</span></a>
+      <div class="nav-links"><a href="#/">Home</a></div>
+      <label class="btn ghost" title="Import a .loomframe.json file">
+        Import project<input id="importInput" type="file" accept=".json,application/json" hidden>
+      </label>
+    </nav>
+    <div class="projects">
+      <h2>Start something new</h2>
+      <div class="templates" id="templates"></div>
+      <h2>Your projects</h2>
+      <div id="shelf" class="shelf"></div>
+      <p id="emptyShelf" class="empty" hidden>No projects yet. Pick a canvas above to start your first animation.</p>
+      <p class="foot-note">Projects are saved on this device. Use Export → Project file to move one to another device.</p>
+    </div>
+  </section>
+
+  <!-- ===================== Studio ===================== -->
   <section id="studio" class="view" hidden>
     <header class="topbar">
-      <button id="backBtn" class="icon-btn" title="Back to shelf" aria-label="Back to shelf">
-        <svg class="logo small"><use href="#logo"/></svg>
-      </button>
+      <a class="icon-btn" href="#/projects" title="All projects" aria-label="All projects"><svg class="logo small"><use href="#logo"/></svg></a>
       <input id="projName" class="name-input" aria-label="Project name" maxlength="60">
       <span id="saveState" class="save-state">Saved</span>
       <div class="spacer"></div>
-      <button id="undoBtn" class="icon-btn" title="Undo (Ctrl/⌘ Z)" aria-label="Undo">↶</button>
-      <button id="redoBtn" class="icon-btn" title="Redo (Shift Ctrl/⌘ Z)" aria-label="Redo">↷</button>
+      <button id="undoBtn" class="icon-btn" title="Undo (Ctrl/⌘ Z)" aria-label="Undo"><svg><use href="#i-undo"/></svg></button>
+      <button id="redoBtn" class="icon-btn" title="Redo (Shift Ctrl/⌘ Z)" aria-label="Redo"><svg><use href="#i-redo"/></svg></button>
+      <button id="helpBtn" class="icon-btn" title="Shortcuts and tips (?)" aria-label="Shortcuts and tips"><svg><use href="#i-help"/></svg></button>
       <div class="menu">
-        <button id="exportBtn" class="btn primary">Export</button>
+        <button id="exportBtn" class="btn primary"><svg class="ico"><use href="#i-download"/></svg>Export</button>
         <div id="exportMenu" class="menu-list" hidden>
-          <button data-export="gif">Animated GIF</button>
-          <button data-export="sheet">Sprite sheet PNG</button>
-          <button data-export="frame">Current frame PNG</button>
-          <button data-export="json">Project file (.json)</button>
+          <button data-export="gif"><b>Animated GIF</b><small>Loops anywhere, great for chat and social</small></button>
+          <button data-export="video"><b>Video</b><small>MP4 or WebM, depending on your browser</small></button>
+          <button data-export="sheet"><b>Sprite sheet</b><small>Every frame in one PNG, for games</small></button>
+          <button data-export="frame"><b>Current frame</b><small>A single PNG image</small></button>
+          <button data-export="json"><b>Project file</b><small>Back up or move to another device</small></button>
         </div>
       </div>
     </header>
 
     <div class="workspace">
       <nav class="tools" aria-label="Tools">
-        <button class="tool active" data-tool="brush" title="Brush (B)" aria-label="Brush">
-          <svg viewBox="0 0 24 24"><path d="M4 20c2 0 4-1 4-3s-1-3-3-3-2 2-1 6zM9 14l9-10 2 2-10 9z" fill="currentColor"/></svg>
-        </button>
-        <button class="tool" data-tool="eraser" title="Eraser (E)" aria-label="Eraser">
-          <svg viewBox="0 0 24 24"><path d="M3 16l9-9 6 6-6 6H6zM10 19h11" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
-        </button>
-        <button class="tool" data-tool="fill" title="Fill (G)" aria-label="Fill">
-          <svg viewBox="0 0 24 24"><path d="M5 11l7-7 7 7-7 7z" stroke="currentColor" stroke-width="2" fill="none"/><path d="M19 15c0 0 2 2.5 2 4a2 2 0 0 1-4 0c0-1.5 2-4 2-4z" fill="currentColor"/></svg>
-        </button>
-        <button class="tool" data-tool="picker" title="Colour picker (I)" aria-label="Colour picker">
-          <svg viewBox="0 0 24 24"><path d="M14 4l6 6-2 2-6-6zM12 8l-8 8v4h4l8-8" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-        </button>
+        <button class="tool active" data-tool="brush" title="Brush (B)" aria-label="Brush"><svg><use href="#i-brush"/></svg></button>
+        <button class="tool" data-tool="eraser" title="Eraser (E)" aria-label="Eraser"><svg><use href="#i-eraser"/></svg></button>
+        <button class="tool" data-tool="fill" title="Paint bucket (G)" aria-label="Paint bucket"><svg><use href="#i-fill"/></svg></button>
+        <button class="tool" data-tool="picker" title="Colour picker (I)" aria-label="Colour picker"><svg><use href="#i-picker"/></svg></button>
+        <button class="tool" data-tool="move" title="Move drawing (V)" aria-label="Move drawing"><svg><use href="#i-move"/></svg></button>
+        <button class="tool" data-tool="hand" title="Pan canvas (H)" aria-label="Pan canvas"><svg><use href="#i-hand"/></svg></button>
         <div class="tool-sep"></div>
         <input id="colorInput" type="color" value="#16141f" title="Colour" aria-label="Colour">
       </nav>
 
-      <main class="stage" id="stage">
-        <canvas id="view"></canvas>
+      <main class="stage-wrap" id="stageWrap">
+        <div class="stage" id="stage">
+          <canvas id="view"></canvas>
+        </div>
         <div id="cursor" class="cursor" hidden></div>
+        <div class="zoom-ctl">
+          <button id="zoomOut" class="icon-btn sm" title="Zoom out (-)" aria-label="Zoom out"><svg><use href="#i-zoom-out"/></svg></button>
+          <button id="zoomLabel" class="zoom-label" title="Fit to screen (0)">100%</button>
+          <button id="zoomIn" class="icon-btn sm" title="Zoom in (+)" aria-label="Zoom in"><svg><use href="#i-zoom-in"/></svg></button>
+        </div>
+        <div id="coach" class="coach" hidden>
+          <b>Welcome to the studio</b>
+          <ol>
+            <li>Draw on the canvas.</li>
+            <li>Press <kbd>D</kbd> to duplicate the frame, or <kbd>N</kbd> for a blank one.</li>
+            <li>Trace the ghost and change the pose.</li>
+            <li>Press <kbd>Space</kbd> to play.</li>
+          </ol>
+          <p>Tip: <b>Motion</b> animates a drawing for you.</p>
+          <button id="coachClose" class="btn primary sm">Got it</button>
+        </div>
+        <aside id="motionPanel" class="motion-panel" hidden aria-label="Motion">
+          <header><svg><use href="#i-motion"/></svg><b>Motion</b><button id="motionClose" class="x" aria-label="Close">✕</button></header>
+          <p class="hint-line">Animates the selected layer's drawing from this frame. <b>Drag on the canvas</b> to set where it ends.</p>
+          <div class="grid2">
+            <label>Frames<input id="mFrames" type="number" min="2" max="60" value="8"></label>
+            <label>Easing<select id="mEase">
+              <option value="inout">Ease in-out</option>
+              <option value="out">Ease out</option>
+              <option value="in">Ease in</option>
+              <option value="linear">Linear</option>
+              <option value="bounce">Bounce</option>
+              <option value="back">Overshoot</option>
+            </select></label>
+            <label>Move X<input id="mX" type="number" value="200" step="10"></label>
+            <label>Move Y<input id="mY" type="number" value="0" step="10"></label>
+            <label>Scale %<input id="mScale" type="number" value="100" min="5" max="500" step="5"></label>
+            <label>Rotate °<input id="mRot" type="number" value="0" step="15"></label>
+            <label>End opacity %<input id="mFade" type="number" value="100" min="0" max="100" step="10"></label>
+            <label class="check"><input id="mHold" type="checkbox" checked>Hold other layers</label>
+          </div>
+          <button id="motionApply" class="btn primary block">Create frames</button>
+        </aside>
       </main>
 
       <aside class="panel" aria-label="Brush settings">
@@ -98,47 +234,72 @@
         <h3>Opacity <span id="opVal">100%</span></h3>
         <input id="opInput" type="range" min="5" max="100" value="100">
         <h3>Canvas</h3>
-        <label class="row">Paper <input id="bgInput" type="color" value="#f7f2e8"></label>
-        <div class="hint">
-          <b>Keys</b><br>
-          B brush · E eraser · G fill · I pick<br>
-          Space play · ← → frames<br>
-          N new frame · D duplicate<br>
-          O onion · [ ] size
-        </div>
+        <label class="row">Paper colour <input id="bgInput" type="color" value="#f7f2e8"></label>
+        <label class="row">Onion skin <input id="onionRange" type="range" min="1" max="3" value="1" title="Frames shown either side"></label>
+        <button id="helpBtn2" class="btn ghost block sm">Keyboard shortcuts</button>
       </aside>
     </div>
 
     <footer class="timeline">
       <div class="transport">
-        <button id="prevBtn" class="icon-btn" title="Previous frame (←)" aria-label="Previous frame">⏮</button>
-        <button id="playBtn" class="icon-btn play" title="Play / pause (Space)" aria-label="Play">▶</button>
-        <button id="nextBtn" class="icon-btn" title="Next frame (→)" aria-label="Next frame">⏭</button>
-        <span id="frameLabel" class="frame-label">1 / 1</span>
-        <label class="fps">FPS <input id="fpsInput" type="number" min="1" max="30" value="12"></label>
-        <button id="onionBtn" class="chip on" title="Onion skin (O)">Onion</button>
+        <div class="group">
+          <button id="prevBtn" class="icon-btn" title="Previous frame (←)" aria-label="Previous frame"><svg><use href="#i-prev"/></svg></button>
+          <button id="playBtn" class="icon-btn play" title="Play / pause (Space)" aria-label="Play"><svg><use id="playIcon" href="#i-play"/></svg></button>
+          <button id="nextBtn" class="icon-btn" title="Next frame (→)" aria-label="Next frame"><svg><use href="#i-next"/></svg></button>
+          <span id="frameLabel" class="frame-label">1 / 1</span>
+        </div>
+        <label class="fps" title="Frames per second">FPS <input id="fpsInput" type="number" min="1" max="30" value="12"></label>
+        <button id="onionBtn" class="chip on" title="Onion skin (O)"><svg><use href="#i-onion"/></svg>Onion</button>
+        <button id="loopBtn" class="chip on" title="Loop playback (L)">Loop</button>
         <div class="spacer"></div>
-        <button id="addFrameBtn" class="chip" title="New blank frame (N)">+ Frame</button>
-        <button id="dupFrameBtn" class="chip" title="Duplicate frame (D)">Duplicate</button>
-        <button id="moveLeftBtn" class="chip" title="Move frame left">◀ Move</button>
-        <button id="moveRightBtn" class="chip" title="Move frame right">Move ▶</button>
-        <button id="delFrameBtn" class="chip danger" title="Delete frame">Delete</button>
+        <div class="group">
+          <button id="addFrameBtn" class="chip" title="New blank frame (N)"><svg><use href="#i-plus"/></svg>Frame</button>
+          <button id="dupFrameBtn" class="chip" title="Duplicate frame (D)"><svg><use href="#i-copy"/></svg>Duplicate</button>
+          <button id="motionBtn" class="chip accent" title="Animate with motion (M)"><svg><use href="#i-motion"/></svg>Motion</button>
+          <button id="moveLeftBtn" class="chip icon" title="Move frame earlier" aria-label="Move frame earlier"><svg><use href="#i-left"/></svg></button>
+          <button id="moveRightBtn" class="chip icon" title="Move frame later" aria-label="Move frame later"><svg><use href="#i-right"/></svg></button>
+          <button id="delFrameBtn" class="chip icon danger" title="Delete frame (Delete)" aria-label="Delete frame"><svg><use href="#i-trash"/></svg></button>
+        </div>
       </div>
       <div class="tracks-wrap">
         <div id="tracks" class="tracks"></div>
       </div>
       <div class="layer-actions">
-        <button id="addLayerBtn" class="chip">+ Layer</button>
-        <button id="delLayerBtn" class="chip danger">Remove layer</button>
+        <button id="addLayerBtn" class="chip"><svg><use href="#i-plus"/></svg>Layer</button>
+        <button id="layerUpBtn" class="chip icon" title="Move layer up" aria-label="Move layer up"><svg style="transform:rotate(90deg)"><use href="#i-left"/></svg></button>
+        <button id="layerDownBtn" class="chip icon" title="Move layer down" aria-label="Move layer down"><svg style="transform:rotate(90deg)"><use href="#i-right"/></svg></button>
+        <button id="delLayerBtn" class="chip danger"><svg><use href="#i-trash"/></svg>Remove layer</button>
+        <span class="hint-inline">Double-click a layer name to rename it.</span>
       </div>
     </footer>
   </section>
 
-  <div id="toast" class="toast" hidden></div>
+  <!-- Shortcuts dialog -->
+  <div id="helpModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-card">
+      <header><h2 id="helpTitle">Shortcuts</h2><button class="x" data-close aria-label="Close">✕</button></header>
+      <div class="keys">
+        <div><kbd>B</kbd> Brush</div><div><kbd>E</kbd> Eraser</div>
+        <div><kbd>G</kbd> Paint bucket</div><div><kbd>I</kbd> Colour picker</div>
+        <div><kbd>V</kbd> Move drawing</div><div><kbd>H</kbd> Pan canvas</div>
+        <div><kbd>Space</kbd> Play / pause</div><div><kbd>L</kbd> Loop on/off</div>
+        <div><kbd>←</kbd><kbd>→</kbd> Previous / next frame</div><div><kbd>O</kbd> Onion skin</div>
+        <div><kbd>N</kbd> New blank frame</div><div><kbd>D</kbd> Duplicate frame</div>
+        <div><kbd>M</kbd> Motion</div><div><kbd>Delete</kbd> Delete frame</div>
+        <div><kbd>[</kbd><kbd>]</kbd> Brush size</div><div><kbd>+</kbd><kbd>−</kbd><kbd>0</kbd> Zoom / fit</div>
+        <div><kbd>⌘/Ctrl Z</kbd> Undo</div><div><kbd>⇧ ⌘/Ctrl Z</kbd> Redo</div>
+        <div><kbd>⌘/Ctrl S</kbd> Save now</div><div><kbd>?</kbd> This list</div>
+      </div>
+      <p class="modal-note">Using a stylus? Pressure controls line thickness. Pinch with two fingers, or hold Ctrl and scroll, to zoom.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden role="status"></div>
 
   <script src="src/api.js"></script>
   <script src="src/gif.js"></script>
   <script src="src/model.js"></script>
+  <script src="src/sample.js"></script>
   <script src="src/app.js"></script>
 </body>
 </html>

@@ -86,7 +86,7 @@
     /* Undo: each entry is {undo(), redo()} */
     push(entry) {
       this.undoStack.push(entry);
-      if (this.undoStack.length > 60) this.undoStack.shift();
+      if (this.undoStack.length > 40) this.undoStack.shift();
       this.redoStack.length = 0;
     }
     undo() { const e = this.undoStack.pop(); if (e) { e.undo(); this.redoStack.push(e); } return !!e; }
