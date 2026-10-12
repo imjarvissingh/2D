@@ -1,0 +1,8 @@
+{
+  "name": "loomframe",
+  "version": "1.0.0",
+  "description": "Free, offline, frame-by-frame animation studio. Draw it. Flip it. Loop it.",
+  "private": true,
+  "scripts": { "start": "node serve.js" },
+  "license": "MIT"
+}
